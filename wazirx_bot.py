@@ -449,11 +449,48 @@ if __name__ == '__main__':
     log_message("🚀 WAZIRX ICT TRADING BOT STARTING...")
     log_message(f"Trading Enabled: {TRADING_ENABLED}")
     log_message(f"Dry Run: {DRY_RUN}")
-    log_message(f"Allowed Symbols: {ALLOWED_SYMBOLS}")
+    log_message(f"Max Positions: {MAX_OPEN_POSITIONS}")
+    log_message(f"Risk Per Trade: {RISK_PER_TRADE_PERCENT}%")
+    log_message(f"Max Daily Loss: ${MAX_DAILY_LOSS_USDT}")
+    log_message(f"Allowed Symbols: {len(ALLOWED_SYMBOLS)}")
     log_message("="*80 + "\n")
+    
+    # Verify exchange connection
+    try:
+        balance = get_balance()
+        log_message(f"✅ Exchange connected | Balance: ${balance['usdt_free']:.2f} USDT")
+    except Exception as e:
+        log_message(f"❌ Exchange connection failed: {e}")
     
     # Start order monitoring
     start_order_monitor()
     
-    # Start Flask server
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    # Send startup notification
+    send_telegram("🚀 <b>Trading Bot Started on Railway</b>\n\nBot is now monitoring for signals.")
+    
+    # Start Flask server - PORT for Railway
+    import os
+    port = int(os.environ.get('PORT', 5000))
+    log_message(f"🌐 Starting server on port {port}")
+    app.run(host='0.0.0.0', port=port, debug=False)
+```
+
+### Step 6: .gitignore verify करें
+```
+# Python
+__pycache__/
+*.py[cod]
+venv/
+env/
+
+# Sensitive
+.env
+*.log
+wazirx_config.py
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
