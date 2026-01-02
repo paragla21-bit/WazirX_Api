@@ -11,17 +11,24 @@ from functools import wraps
 import os
 from dotenv import load_dotenv
 
-# Load environment variables
 load_dotenv()
 
 app = Flask(__name__)
 
-# ============= EXCHANGE SETUP =============
-# WazirX ab CCXT mein supported nahi hai → Binance use kar rahe hain
+# ============= DEFAULT VALUES IF NOT IN CONFIG =============
+RATE_LIMIT_ENABLED = True  # Always True for safety
+REQUEST_TIMEOUT_SECONDS = 10
+ORDER_CHECK_INTERVAL_SECONDS = 5
+ORDER_TIMEOUT_MINUTES = 30
+MAX_OPEN_POSITIONS = 3
+DEFAULT_SL_PERCENT = 2.0
+DEFAULT_TP_PERCENT = 4.0
+
+# ============= BINANCE EXCHANGE SETUP =============
 exchange = ccxt.binance({
     'apiKey': os.getenv('BINANCE_API_KEY'),
     'secret': os.getenv('BINANCE_SECRET_KEY'),
-    'enableRateLimit': RATE_LIMIT_ENABLED,
+    'enableRateLimit': True,
     'timeout': REQUEST_TIMEOUT_SECONDS * 1000,
     'options': {
         'defaultType': 'spot',
@@ -29,7 +36,7 @@ exchange = ccxt.binance({
 })
 
 # ============= THREAD-SAFE DATA STRUCTURES =============
-data_lock = threading.Lock()  # Protect shared data
+data_lock = threading.Lock()
 
 # Daily tracking
 daily_pnl_usdt = 0
@@ -40,11 +47,10 @@ winning_trades_today = 0
 losing_trades_today = 0
 
 # Active orders
-active_orders = {}  # {order_id: {symbol, side, sl, tp, entry_price, ...}}
+active_orders = {}
 
 # ============= RETRY DECORATOR =============
 def retry_on_failure(max_retries=3, delay=2):
-    """Decorator to retry functions on failure"""
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -59,22 +65,6 @@ def retry_on_failure(max_retries=3, delay=2):
             return None
         return wrapper
     return decorator
-
-# ============= DAILY TRACKING =============
-def reset_daily_tracker():
-    global daily_pnl_usdt, daily_pnl_inr, last_reset_date, total_trades_today
-    global winning_trades_today, losing_trades_today
-
-    today = datetime.now().date()
-    if today != last_reset_date:
-        with data_lock:
-            daily_pnl_usdt = 0
-            daily_pnl_inr = 0
-            total_trades_today = 0
-            winning_trades_today = 0
-            losing_trades_today = 0
-            last_reset_date = today
-        log_message(f"✅ Daily tracker reset: {today}")
 
 # ============= LOGGING =============
 log_lock = threading.Lock()
@@ -142,33 +132,29 @@ def check_safety_limits(data):
     global daily_pnl_usdt
     reset_daily_tracker()
 
-    # Check if trading enabled
     if not TRADING_ENABLED:
         return False, "❌ Trading is disabled in config"
 
-    # Daily Loss Check (USDT)
     with data_lock:
         if abs(daily_pnl_usdt) >= MAX_DAILY_LOSS_USDT:
             return False, f"❌ Daily loss limit reached: ${abs(daily_pnl_usdt):.2f}"
 
-    # Max positions check
     with data_lock:
         if len(active_orders) >= MAX_OPEN_POSITIONS:
             return False, f"❌ Maximum positions reached: {len(active_orders)}/{MAX_OPEN_POSITIONS}"
 
-    # Symbol Check
-    tv_symbol = data.get('symbol', '')
-    symbol = SYMBOL_MAP.get(tv_symbol, tv_symbol.upper() + '/USDT')
+    symbol = data.get('symbol', '')
+    mapped_symbol = SYMBOL_MAP.get(symbol, symbol)
+    if '/' not in mapped_symbol:
+        mapped_symbol += '/USDT'
 
-    if symbol not in ALLOWED_SYMBOLS:
-        return False, f"❌ Symbol not allowed: {symbol}"
+    if mapped_symbol not in ALLOWED_SYMBOLS:
+        return False, f"❌ Symbol not allowed: {mapped_symbol}"
 
-    # Balance Check
     balance = get_balance()
     if balance['usdt_free'] < MIN_BALANCE_USDT:
         return False, f"❌ Insufficient balance: ${balance['usdt_free']:.2f}"
 
-    # Trading Hours Check (if restricted)
     if not TRADING_24_7:
         current_hour = datetime.now().hour
         if current_hour in RESTRICTED_HOURS:
@@ -201,12 +187,11 @@ def calculate_position_size(symbol, entry_price, stop_loss_price):
 
         quantity = position_size_usdt / entry_price
 
-        # Get market info for precision
         markets = exchange.load_markets()
         market = markets.get(symbol)
 
         if market:
-            precision = market['precision']['amount']
+            precision = market.get('precision', {}).get('amount')
             if precision is not None:
                 quantity = round(quantity, precision)
 
@@ -250,21 +235,18 @@ def place_order(symbol, side, quantity, entry_price, sl_price, tp_price):
                 'amount': quantity
             }
 
-        # Calculate limit price with slippage
         if side == 'buy':
             limit_price = entry_price * (1 + SLIPPAGE_PERCENT / 100)
         else:
             limit_price = entry_price * (1 - SLIPPAGE_PERCENT / 100)
 
-        # Round price to exchange precision
         markets = exchange.load_markets()
         market = markets.get(symbol)
         if market:
-            price_precision = market['precision']['price']
+            price_precision = market.get('precision', {}).get('price')
             if price_precision is not None:
                 limit_price = round(limit_price, price_precision)
 
-        # Place limit order
         order = exchange.create_limit_order(
             symbol=symbol,
             side=side,
@@ -287,7 +269,13 @@ def place_order(symbol, side, quantity, entry_price, sl_price, tp_price):
                 'filled_quantity': 0
             }
 
-        msg = f"🚀 <b>Order Placed</b>\nSymbol: {symbol}\nSide: {side.upper()}\nQuantity: {quantity}\nPrice: ${limit_price:.4f}\nSL: ${sl_price:.4f}\nTP: ${tp_price:.4f}"
+        msg = f"🚀 <b>Order Placed</b>\n"
+        msg += f"Symbol: {symbol}\n"
+        msg += f"Side: {side.upper()}\n"
+        msg += f"Quantity: {quantity}\n"
+        msg += f"Price: ${limit_price:.4f}\n"
+        msg += f"SL: ${sl_price:.4f}\n"
+        msg += f"TP: ${tp_price:.4f}"
         send_telegram(msg)
 
         return order
@@ -339,7 +327,12 @@ def close_position(order_id, order_info, reason):
         log_message(f"🔔 Position closed: {reason} | P&L: ${pnl:.2f}")
 
         emoji = "✅" if pnl > 0 else "❌"
-        msg = f"{emoji} <b>Position Closed</b>\nReason: {reason}\nP&L: ${pnl:.2f}\nSymbol: {symbol}"
+        msg = f"{emoji} <b>Position Closed</b>\n"
+        msg += f"Reason: {reason}\n"
+        msg += f"P&L: ${pnl:.2f}\n"
+        msg += f"Symbol: {symbol}\n"
+        msg += f"Entry: ${entry_price:.4f}\n"
+        msg += f"Exit: ${current_price:.4f}"
         send_telegram(msg)
 
         return True
@@ -437,7 +430,6 @@ def monitor_active_orders():
 
             except Exception as e:
                 log_message(f"❌ Error monitoring order {order_id}: {e}")
-                continue
 
     except Exception as e:
         log_message(f"❌ Order monitoring error: {e}")
@@ -464,8 +456,8 @@ def webhook():
         tp = float(data.get('tp', 0))
 
         symbol = SYMBOL_MAP.get(tv_symbol, tv_symbol)
-        if not symbol.endswith('/USDT'):
-            symbol = f"{symbol}/USDT"
+        if '/' not in symbol:
+            symbol += '/USDT'
 
         if action not in ['BUY', 'SELL']:
             return jsonify({"status": "error", "reason": "Invalid action"}), 400
@@ -519,7 +511,7 @@ def health():
         with data_lock:
             response_data = {
                 "status": "running",
-                "exchange": "Binance",  # Updated to Binance
+                "exchange": "Binance",
                 "balance_usdt": balance['usdt_free'],
                 "daily_pnl_usdt": round(daily_pnl_usdt, 2),
                 "trades_today": total_trades_today,
@@ -561,7 +553,7 @@ def get_positions():
 
     return jsonify(positions_data), 200
 
-# ============= CLOSE ALL POSITIONS (EMERGENCY) =============
+# ============= CLOSE ALL POSITIONS =============
 @app.route('/close_all', methods=['POST'])
 def close_all_positions():
     try:
@@ -606,7 +598,7 @@ def start_order_monitor():
 # ============= MAIN =============
 if __name__ == '__main__':
     log_message("\n" + "="*80)
-    log_message("🚀 BINANCE ICT TRADING BOT STARTING...")
+    log_message("🚀 BINANCE TRADING BOT STARTING...")
     log_message(f"Trading Enabled: {TRADING_ENABLED}")
     log_message(f"Dry Run: {DRY_RUN}")
     log_message(f"Max Positions: {MAX_OPEN_POSITIONS}")
@@ -625,5 +617,5 @@ if __name__ == '__main__':
 
     send_telegram("🚀 <b>Trading Bot Started</b>\n\nBot is now monitoring for signals.")
 
-    # For local testing only; Render uses Gunicorn
+    # Render pe Gunicorn chalega, local testing ke liye uncomment kar sakte ho
     # app.run(host='0.0.0.0', port=5000, debug=False)
