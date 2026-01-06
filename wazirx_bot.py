@@ -611,6 +611,12 @@ def start_order_monitor():
     log_message("✅ Order monitor thread started")
 
 # ============= MAIN =============
+def reset_daily_tracker():
+    global last_reset_date, daily_pnl_usdt, daily_pnl_inr, total_trades_today, winning_trades_today, losing_trades_today
+    if datetime.now().date() > last_reset_date:
+        daily_pnl_usdt = 0
+        daily_pnl_inr
+
 if __name__ == '__main__':
     log_message("\n" + "="*80)
     log_message("🚀 BINANCE TRADING BOT STARTING...")
@@ -657,4 +663,5 @@ def check_safety_limits(data):
         return False, "❌ Trading is disabled in config"
     
     # Rest of function same...
+
 
