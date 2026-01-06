@@ -204,6 +204,22 @@ def calculate_position_size(symbol, entry_price, stop_loss_price):
         log_message(f"❌ Position size calculation error: {e}")
         return 0, str(e)
 
+
+    # Minimum order size protection
+    min_order_usdt = 5.0
+    if quantity * entry_price < min_order_usdt:
+        return 0, f"Order too small (min ${min_order_usdt})"
+    
+    # Minimum quantity
+    markets = exchange.load_markets()
+    market = markets.get(symbol)
+    if market:
+        min_qty = market.get('limits', {}).get('amount', {}).get('min', 0.001)
+        quantity = max(quantity, min_qty)
+    
+    return quantity, "OK"
+
+
 # ============= PLACE ORDER =============
 @retry_on_failure(max_retries=2, delay=3)
 def place_order(symbol, side, quantity, entry_price, sl_price, tp_price):
@@ -641,3 +657,4 @@ def check_safety_limits(data):
         return False, "❌ Trading is disabled in config"
     
     # Rest of function same...
+
