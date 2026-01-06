@@ -620,3 +620,24 @@ if __name__ == '__main__':
     # app.run(host='0.0.0.0', port=5000, debug=False)
 
 
+
+# YE 2 FUNCTIONS wazirx_bot.py KE LAST ME ADD KARO (main() se PEHLE)
+
+def reset_daily_tracker():
+    global last_reset_date, daily_pnl_usdt, total_trades_today, winning_trades_today, losing_trades_today
+    if datetime.now().date() > last_reset_date:
+        daily_pnl_usdt = 0
+        daily_pnl_inr = 0
+        total_trades_today = 0
+        winning_trades_today = 0
+        losing_trades_today = 0
+        last_reset_date = datetime.now().date()
+
+# Updated safety check with reset
+def check_safety_limits(data):
+    reset_daily_tracker()  # YE LINE ADD HOGI
+    
+    if not TRADING_ENABLED:
+        return False, "❌ Trading is disabled in config"
+    
+    # Rest of function same...
