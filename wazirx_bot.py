@@ -24,15 +24,13 @@ MAX_OPEN_POSITIONS = 3
 DEFAULT_SL_PERCENT = 2.0
 DEFAULT_TP_PERCENT = 4.0
 
-# ============= BINANCE EXCHANGE SETUP =============
-exchange = ccxt.binance({
-    'apiKey': os.getenv('BINANCE_API_KEY'),
-    'secret': os.getenv('BINANCE_SECRET_KEY'),
+# Binance ko replace karo:
+exchange = ccxt.wazirx({
+    'apiKey': os.getenv('WAZIRX_API_KEY'),
+    'secret': os.getenv('WAZIRX_SECRET_KEY'),
     'enableRateLimit': True,
-    'timeout': REQUEST_TIMEOUT_SECONDS * 1000,
-    'options': {
-        'defaultType': 'spot',
-    }
+    'sandbox': False,  # Live trading
+    'options': {'defaultType': 'spot'}
 })
 
 # ============= THREAD-SAFE DATA STRUCTURES =============
@@ -619,3 +617,4 @@ if __name__ == '__main__':
 
     # Render pe Gunicorn chalega, local testing ke liye uncomment kar sakte ho
     # app.run(host='0.0.0.0', port=5000, debug=False)
+
