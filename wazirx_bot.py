@@ -29,9 +29,10 @@ exchange = ccxt.wazirx({
     'apiKey': os.getenv('WAZIRX_API_KEY'),
     'secret': os.getenv('WAZIRX_SECRET_KEY'),
     'enableRateLimit': True,
-    'sandbox': False,  # Live trading
+    'sandbox': False,
     'options': {'defaultType': 'spot'}
 })
+
 
 # ============= THREAD-SAFE DATA STRUCTURES =============
 data_lock = threading.Lock()
@@ -617,4 +618,5 @@ if __name__ == '__main__':
 
     # Render pe Gunicorn chalega, local testing ke liye uncomment kar sakte ho
     # app.run(host='0.0.0.0', port=5000, debug=False)
+
 
