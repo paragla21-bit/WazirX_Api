@@ -1,5 +1,10 @@
 flask
-ccxt
+ccxt==4.4.9  # Latest version
+python-dotenv
+requests
+gunicorn
+flask
+ccxt==4.4.9  # Latest version
 python-dotenv
 requests
 gunicorn
