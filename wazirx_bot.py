@@ -203,7 +203,7 @@ def calculate_position_size(symbol, entry_price, stop_loss_price):
             
             # WazirX ka minimum order check (Usually $1.0 or $2.0)
             min_notional = market.get('limits', {}).get('cost', {}).get('min', 1.0)
-            if (quantity * entry_
+            if (quantity * entry_)
 
 # ============= PLACE ORDER =============
 @retry_on_failure(max_retries=2, delay=3)
@@ -648,6 +648,7 @@ def check_safety_limits(data):
         return False, "❌ Trading is disabled in config"
     
     # Rest of function same...
+
 
 
 
