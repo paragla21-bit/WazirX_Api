@@ -1,4 +1,3 @@
-# wazirx_bot.py
 from flask import Flask, request, jsonify
 import ccxt
 from wazirx_config import *
@@ -16,7 +15,7 @@ load_dotenv()
 app = Flask(__name__)
 
 # ============= DEFAULT VALUES IF NOT IN CONFIG =============
-RATE_LIMIT_ENABLED = True  # Always True for safety
+RATE_LIMIT_ENABLED = True
 REQUEST_TIMEOUT_SECONDS = 10
 ORDER_CHECK_INTERVAL_SECONDS = 5
 ORDER_TIMEOUT_MINUTES = 30
@@ -24,7 +23,7 @@ MAX_OPEN_POSITIONS = 3
 DEFAULT_SL_PERCENT = 2.0
 DEFAULT_TP_PERCENT = 4.0
 
-# Binance ko replace karo:
+# WazirX Exchange Setup
 exchange = ccxt.wazirx({
     'apiKey': os.getenv('WAZIRX_API_KEY'),
     'secret': os.getenv('WAZIRX_SECRET_KEY'),
@@ -32,7 +31,6 @@ exchange = ccxt.wazirx({
     'sandbox': False,
     'options': {'defaultType': 'spot'}
 })
-
 
 # ============= THREAD-SAFE DATA STRUCTURES =============
 data_lock = threading.Lock()
@@ -126,9 +124,19 @@ def get_current_price(symbol):
         log_message(f"❌ Price fetch error for {symbol}: {e}")
         return None
 
+# ============= RESET DAILY TRACKER =============
+def reset_daily_tracker():
+    global last_reset_date, daily_pnl_usdt, daily_pnl_inr, total_trades_today, winning_trades_today, losing_trades_today
+    if datetime.now().date() > last_reset_date:
+        daily_pnl_usdt = 0
+        daily_pnl_inr = 0
+        total_trades_today = 0
+        winning_trades_today = 0
+        losing_trades_today = 0
+        last_reset_date = datetime.now().date()
+
 # ============= SAFETY CHECKS =============
 def check_safety_limits(data):
-    global daily_pnl_usdt
     reset_daily_tracker()
 
     if not TRADING_ENABLED:
@@ -167,8 +175,7 @@ def calculate_position_size(symbol, entry_price, stop_loss_price):
         balance = get_balance()
         usdt_free = float(balance.get('usdt_free', 0))
 
-        # Testing ke liye 0 rakh rahe hain taaki ₹108 use ho sake
-        min_balance_to_keep = 0 
+        min_balance_to_keep = 0
         
         if usdt_free <= min_balance_to_keep:
             return 0, "Insufficient balance"
@@ -198,7 +205,6 @@ def calculate_position_size(symbol, entry_price, stop_loss_price):
                 quantity = available_capital / entry_price
                 quantity = round(quantity, precision)
 
-        # FINAL CHECK (Ye wo line hai jisme error tha)
         if (quantity * entry_price) < 1.0:
             return 0, f"Order too small (${round(quantity * entry_price, 2)})"
 
@@ -437,6 +443,11 @@ def monitor_active_orders():
     except Exception as e:
         log_message(f"❌ Order monitoring error: {e}")
 
+# ============= ROOT ENDPOINT (404 FIX) =============
+@app.route('/', methods=['GET'])
+def index():
+    return "<h1>🚀 WazirX Trading Bot is Live</h1><p>Check <a href='/health'>/health</a> for status.</p>", 200
+
 # ============= WEBHOOK ENDPOINT =============
 @app.route('/webhook', methods=['POST'])
 def webhook():
@@ -514,7 +525,7 @@ def health():
         with data_lock:
             response_data = {
                 "status": "running",
-                "exchange": "Binance",
+                "exchange": "WazirX",  # ✅ FIXED
                 "balance_usdt": balance['usdt_free'],
                 "daily_pnl_usdt": round(daily_pnl_usdt, 2),
                 "trades_today": total_trades_today,
@@ -599,15 +610,9 @@ def start_order_monitor():
     log_message("✅ Order monitor thread started")
 
 # ============= MAIN =============
-def reset_daily_tracker():
-    global last_reset_date, daily_pnl_usdt, daily_pnl_inr, total_trades_today, winning_trades_today, losing_trades_today
-    if datetime.now().date() > last_reset_date:
-        daily_pnl_usdt = 0
-        daily_pnl_inr
-
 if __name__ == '__main__':
     log_message("\n" + "="*80)
-    log_message("🚀 BINANCE TRADING BOT STARTING...")
+    log_message("🚀 WAZIRX TRADING BOT STARTING...")
     log_message(f"Trading Enabled: {TRADING_ENABLED}")
     log_message(f"Dry Run: {DRY_RUN}")
     log_message(f"Max Positions: {MAX_OPEN_POSITIONS}")
@@ -623,36 +628,4 @@ if __name__ == '__main__':
         log_message(f"❌ Exchange connection failed: {e}")
 
     start_order_monitor()
-
-    send_telegram("🚀 <b>Trading Bot Started</b>\n\nBot is now monitoring for signals.")
-
-    # Render pe Gunicorn chalega, local testing ke liye uncomment kar sakte ho
-    # app.run(host='0.0.0.0', port=5000, debug=False)
-
-
-
-# YE 2 FUNCTIONS wazirx_bot.py KE LAST ME ADD KARO (main() se PEHLE)
-
-def reset_daily_tracker():
-    global last_reset_date, daily_pnl_usdt, total_trades_today, winning_trades_today, losing_trades_today
-    if datetime.now().date() > last_reset_date:
-        daily_pnl_usdt = 0
-        daily_pnl_inr = 0
-        total_trades_today = 0
-        winning_trades_today = 0
-        losing_trades_today = 0
-        last_reset_date = datetime.now().date()
-
-# Updated safety check with reset
-def check_safety_limits(data):
-    reset_daily_tracker()  # YE LINE ADD HOGI
-    
-    if not TRADING_ENABLED:
-        return False, "❌ Trading is disabled in config"
-    
-    # Rest of function same...
-
-
-
-
-
+    send_telegram("🚀 <b>WazirX Trading Bot Started</b>\n\nBot is now monitoring for signals.")
