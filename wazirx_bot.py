@@ -469,16 +469,25 @@ def webhook():
         sl = float(data.get('sl', 0))
         tp = float(data.get('tp', 0))
 
-        symbol = SYMBOL_MAP.get(tv_symbol, tv_symbol)
-        if '/' not in symbol:
-            symbol += '/USDT'
+        # ✅ FIXED SYMBOL HANDLING
+        if tv_symbol in SYMBOL_MAP:
+            symbol = SYMBOL_MAP[tv_symbol]
+        elif '/' in tv_symbol:
+            symbol = tv_symbol  # Already formatted
+        else:
+            symbol = f"{tv_symbol}/USDT"  # Add /USDT only if missing
 
+        # Validation
         if action not in ['BUY', 'SELL']:
             return jsonify({"status": "error", "reason": "Invalid action"}), 400
 
         if price <= 0:
             return jsonify({"status": "error", "reason": "Invalid price"}), 400
 
+        if symbol not in ALLOWED_SYMBOLS:
+            return jsonify({"status": "error", "reason": f"Symbol not allowed: {symbol}"}), 400
+
+        # Auto SL/TP calculation
         if sl <= 0:
             sl = price * (1 - DEFAULT_SL_PERCENT / 100) if action == 'BUY' else price * (1 + DEFAULT_SL_PERCENT / 100)
 
@@ -515,7 +524,7 @@ def webhook():
     except Exception as e:
         log_message(f"❌ Webhook error: {str(e)}")
         return jsonify({"status": "error", "message": str(e)}), 500
-
+        
 # ============= HEALTH CHECK =============
 @app.route('/health', methods=['GET'])
 def health():
@@ -629,3 +638,4 @@ if __name__ == '__main__':
 
     start_order_monitor()
     send_telegram("🚀 <b>WazirX Trading Bot Started</b>\n\nBot is now monitoring for signals.")
+
