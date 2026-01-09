@@ -167,16 +167,13 @@ def calculate_position_size(symbol, entry_price, stop_loss_price):
         balance = get_balance()
         usdt_free = float(balance.get('usdt_free', 0))
 
-        # ₹108 ke liye hum MIN_BALANCE ko 0 maan kar chalenge
+        # Testing ke liye 0 rakh rahe hain taaki ₹108 use ho sake
         min_balance_to_keep = 0 
         
         if usdt_free <= min_balance_to_keep:
             return 0, "Insufficient balance"
 
         available_capital = usdt_free - min_balance_to_keep
-
-        # Risk Calculation
-        # Agar ₹108 hi hain, toh hum percentage ki jagah available capital use karenge
         risk_amount = available_capital * (RISK_PER_TRADE_PERCENT / 100)
         
         sl_distance_percent = abs(entry_price - stop_loss_price) / entry_price
@@ -184,26 +181,32 @@ def calculate_position_size(symbol, entry_price, stop_loss_price):
         if sl_distance_percent <= 0:
             return 0, "Invalid SL distance"
 
-        # Position Size Logic
         position_size_usdt = risk_amount / sl_distance_percent
-        
-        # Limit it to what we actually have (important for small accounts)
         position_size_usdt = min(position_size_usdt, available_capital)
         
         quantity = position_size_usdt / entry_price
 
-        # Precision and Limits check
         markets = exchange.load_markets()
         market = markets.get(symbol)
 
         if market:
-            # Amount precision set karna
             precision = market.get('precision', {}).get('amount', 4)
             quantity = round(quantity, precision)
             
-            # WazirX ka minimum order check (Usually $1.0 or $2.0)
             min_notional = market.get('limits', {}).get('cost', {}).get('min', 1.0)
-            if (quantity * entry_)
+            if (quantity * entry_price) < min_notional:
+                quantity = available_capital / entry_price
+                quantity = round(quantity, precision)
+
+        # FINAL CHECK (Ye wo line hai jisme error tha)
+        if (quantity * entry_price) < 1.0:
+            return 0, f"Order too small (${round(quantity * entry_price, 2)})"
+
+        return quantity, "OK"
+
+    except Exception as e:
+        log_message(f"❌ Position size calculation error: {e}")
+        return 0, str(e)
 
 # ============= PLACE ORDER =============
 @retry_on_failure(max_retries=2, delay=3)
@@ -648,6 +651,7 @@ def check_safety_limits(data):
         return False, "❌ Trading is disabled in config"
     
     # Rest of function same...
+
 
 
 
