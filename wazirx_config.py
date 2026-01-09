@@ -21,7 +21,7 @@ DRY_RUN = False              # True = simulation mode, False = real trading
 # ============= RISK MANAGEMENT =============
 #RISK_PER_TRADE_PERCENT = 1.0
 RISK_PER_TRADE_PERCENT = 100
-MAX_POSITION_SIZE_USDT = 1.3
+MAX_POSITION_SIZE_USDT = 1.2
 MIN_BALANCE_USDT = 0
 MAX_DAILY_LOSS_USDT = 5.0
 MAX_OPEN_POSITIONS = 3
@@ -68,6 +68,7 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 # ============= STOP LOSS / TAKE PROFIT =============
 DEFAULT_SL_PERCENT = 2.0
 DEFAULT_TP_PERCENT = 4.0
+
 
 
 
