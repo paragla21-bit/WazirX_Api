@@ -165,60 +165,45 @@ def check_safety_limits(data):
 def calculate_position_size(symbol, entry_price, stop_loss_price):
     try:
         balance = get_balance()
-        usdt_free = balance['usdt_free']
+        usdt_free = float(balance.get('usdt_free', 0))
 
-        if usdt_free <= MIN_BALANCE_USDT:
+        # ₹108 ke liye hum MIN_BALANCE ko 0 maan kar chalenge
+        min_balance_to_keep = 0 
+        
+        if usdt_free <= min_balance_to_keep:
             return 0, "Insufficient balance"
 
-        available_capital = usdt_free - MIN_BALANCE_USDT
+        available_capital = usdt_free - min_balance_to_keep
 
+        # Risk Calculation
+        # Agar ₹108 hi hain, toh hum percentage ki jagah available capital use karenge
         risk_amount = available_capital * (RISK_PER_TRADE_PERCENT / 100)
-        risk_amount = min(risk_amount, MAX_POSITION_SIZE_USDT * 0.02)
-
+        
         sl_distance_percent = abs(entry_price - stop_loss_price) / entry_price
 
         if sl_distance_percent <= 0:
             return 0, "Invalid SL distance"
 
+        # Position Size Logic
         position_size_usdt = risk_amount / sl_distance_percent
-        position_size_usdt = min(position_size_usdt, MAX_POSITION_SIZE_USDT)
-        position_size_usdt = min(position_size_usdt, available_capital * 0.8)
-
+        
+        # Limit it to what we actually have (important for small accounts)
+        position_size_usdt = min(position_size_usdt, available_capital)
+        
         quantity = position_size_usdt / entry_price
 
+        # Precision and Limits check
         markets = exchange.load_markets()
         market = markets.get(symbol)
 
         if market:
-            precision = market.get('precision', {}).get('amount')
-            if precision is not None:
-                quantity = round(quantity, precision)
-
-        min_order_usdt = 1.0
-        if quantity * entry_price < min_order_usdt:
-            return 0, f"Order size too small (min ${min_order_usdt})"
-
-        return quantity, "OK"
-
-    except Exception as e:
-        log_message(f"❌ Position size calculation error: {e}")
-        return 0, str(e)
-
-
-    # Minimum order size protection
-    min_order_usdt = 5.0
-    if quantity * entry_price < min_order_usdt:
-        return 0, f"Order too small (min ${min_order_usdt})"
-    
-    # Minimum quantity
-    markets = exchange.load_markets()
-    market = markets.get(symbol)
-    if market:
-        min_qty = market.get('limits', {}).get('amount', {}).get('min', 0.001)
-        quantity = max(quantity, min_qty)
-    
-    return quantity, "OK"
-
+            # Amount precision set karna
+            precision = market.get('precision', {}).get('amount', 4)
+            quantity = round(quantity, precision)
+            
+            # WazirX ka minimum order check (Usually $1.0 or $2.0)
+            min_notional = market.get('limits', {}).get('cost', {}).get('min', 1.0)
+            if (quantity * entry_
 
 # ============= PLACE ORDER =============
 @retry_on_failure(max_retries=2, delay=3)
@@ -663,5 +648,6 @@ def check_safety_limits(data):
         return False, "❌ Trading is disabled in config"
     
     # Rest of function same...
+
 
 
