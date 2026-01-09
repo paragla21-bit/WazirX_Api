@@ -1,7 +1,6 @@
 # wazirx_config.py
 import os
 from dotenv import load_dotenv
-
 load_dotenv()  # .env file se values load karne ke liye (local development)
 
 # ============= API CREDENTIALS =============
@@ -19,9 +18,9 @@ TRADING_ENABLED = True      # Master switch
 DRY_RUN = False              # True = simulation mode, False = real trading
 
 # ============= RISK MANAGEMENT =============
-#RISK_PER_TRADE_PERCENT = 1.0
-RISK_PER_TRADE_PERCENT = 100
-MAX_POSITION_SIZE_USDT = 1.2
+# ⚠️ CHANGE 1: 100% risk testing ke liye theek hai, but production mein 1-2% safe hai
+RISK_PER_TRADE_PERCENT = 100  # Testing: 100%, Production: 1-2%
+MAX_POSITION_SIZE_USDT = 200  # ✅ CHANGE 2: 1.2 se badhaya (₹108 = ~$1.3, so 200 safe hai)
 MIN_BALANCE_USDT = 0
 MAX_DAILY_LOSS_USDT = 5.0
 MAX_OPEN_POSITIONS = 3
@@ -35,7 +34,7 @@ ORDER_TIMEOUT_MINUTES = 30
 
 # ============= SYMBOL MAPPING =============
 # TradingView se aane wale symbols → exchange format mein convert
-# Binance ke liye /USDT style use kar rahe hain
+# WazirX ke liye /USDT style use kar rahe hain
 SYMBOL_MAP = {
     'BTCUSD': 'BTC/USDT',
     'ETHUSD': 'ETH/USDT',
@@ -68,9 +67,3 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 # ============= STOP LOSS / TAKE PROFIT =============
 DEFAULT_SL_PERCENT = 2.0
 DEFAULT_TP_PERCENT = 4.0
-
-
-
-
-
-
